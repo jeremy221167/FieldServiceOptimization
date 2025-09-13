@@ -1,0 +1,401 @@
+@page "/fault-diagnosis"
+@inject IDemoDataService DemoDataService
+@inject ITenantRecommendationService RecommendationService
+
+<PageTitle>Fault Diagnosis - ML.NET Intelligence</PageTitle>
+
+<h3>AI-Powered Fault Diagnosis System</h3>
+<p class="lead">Equipment fault prediction with historic data analysis, parts recommendations, and technician expertise matching</p>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5>Fault Diagnosis Request</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">Equipment Type</label>
+                    <select class="form-select" @bind="selectedEquipmentType">
+                        <option value="">Select Equipment Type</option>
+                        <option value="HVAC Unit">HVAC Unit</option>
+                        <option value="Electrical Panel">Electrical Panel</option>
+                        <option value="Motor">Motor</option>
+                        <option value="Compressor">Compressor</option>
+                        <option value="Pump">Pump</option>
+                    </select>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Equipment ID</label>
+                    <input type="text" class="form-control" @bind="equipmentId" placeholder="e.g., EQUIP-001" />
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Reported Symptoms</label>
+                    <textarea class="form-control" rows="4" @bind="reportedSymptoms"
+                              placeholder="Describe the observed symptoms, sounds, behaviors, etc."></textarea>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Priority</label>
+                        <select class="form-select" @bind="priority">
+                            <option value="Low">Low</option>
+                            <option value="Medium">Medium</option>
+                            <option value="High">High</option>
+                            <option value="Critical">Critical</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Reported By</label>
+                        <input type="text" class="form-control" @bind="reportedBy" placeholder="Reporter name" />
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" @bind="includePartsRecommendations" id="partsCheck">
+                        <label class="form-check-label" for="partsCheck">
+                            Include Parts Recommendations
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" @bind="includeTechnicianRecommendations" id="techCheck">
+                        <label class="form-check-label" for="techCheck">
+                            Include Technician Recommendations
+                        </label>
+                    </div>
+                </div>
+
+                <button class="btn btn-primary" @onclick="RunDiagnosis" disabled="@isLoading">
+                    @if (isLoading)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2"></span>
+                    }
+                    Run AI Diagnosis
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        @if (diagnosisResponse != null)
+        {
+            <div class="card">
+                <div class="card-header">
+                    <h5>Diagnosis Results</h5>
+                    <small class="text-muted">Generated: @diagnosisResponse.GeneratedAt.ToString("yyyy-MM-dd HH:mm")</small>
+                </div>
+                <div class="card-body">
+                    @if (diagnosisResponse.PossibleFaults.Any())
+                    {
+                        <h6>Predicted Faults</h6>
+                        @foreach (var fault in diagnosisResponse.PossibleFaults.Take(3))
+                        {
+                            <div class="border rounded p-3 mb-3">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <h6 class="mb-0">@fault.FaultName</h6>
+                                    <span class="badge @GetSeverityClass(fault.Severity)">@fault.Severity</span>
+                                </div>
+                                <div class="progress mb-2" style="height: 15px;">
+                                    <div class="progress-bar @GetProbabilityClass(fault.ProbabilityScore)"
+                                         style="width: @(fault.ProbabilityScore * 100)%">
+                                        @fault.ProbabilityScore.ToString("P1")
+                                    </div>
+                                </div>
+                                <p class="small mb-2"><strong>Code:</strong> @fault.FaultCode | <strong>Category:</strong> @fault.Category</p>
+                                <p class="small mb-2"><strong>Est. Resolution:</strong> @fault.EstimatedResolutionTime minutes</p>
+                                <p class="small text-muted">@fault.DiagnosisExplanation</p>
+                            </div>
+                        }
+
+                        <div class="row mt-3">
+                            <div class="col-6">
+                                <div class="text-center">
+                                    <h6>Est. Time</h6>
+                                    <span class="badge bg-info">@diagnosisResponse.EstimatedResolutionTimeMinutes min</span>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="text-center">
+                                    <h6>Est. Cost</h6>
+                                    <span class="badge bg-success">$@diagnosisResponse.EstimatedCost.ToString("F2")</span>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="alert alert-warning">
+                            No specific faults identified. Manual inspection recommended.
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+        else if (isLoading)
+        {
+            <div class="card">
+                <div class="card-body text-center">
+                    <div class="spinner-border" role="status"></div>
+                    <p class="mt-2">Analyzing fault patterns...</p>
+                </div>
+            </div>
+        }
+        else if (errorMessage != null)
+        {
+            <div class="alert alert-danger">
+                <strong>Error:</strong> @errorMessage
+            </div>
+        }
+    </div>
+</div>
+
+@if (diagnosisResponse?.RecommendedParts?.Any() == true)
+{
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5>Recommended Parts</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Part Number</th>
+                                    <th>Description</th>
+                                    <th>Qty</th>
+                                    <th>Unit Cost</th>
+                                    <th>Total</th>
+                                    <th>Stock Status</th>
+                                    <th>Score</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var part in diagnosisResponse.RecommendedParts)
+                                {
+                                    <tr>
+                                        <td><strong>@part.PartNumber</strong></td>
+                                        <td>@part.PartName</td>
+                                        <td>@part.Quantity</td>
+                                        <td>$@part.UnitCost.ToString("F2")</td>
+                                        <td>$@part.TotalCost.ToString("F2")</td>
+                                        <td>
+                                            <span class="badge @(part.InStock ? "bg-success" : "bg-warning")">
+                                                @(part.InStock ? "In Stock" : "Order Required")
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <div class="progress" style="width: 60px; height: 15px;">
+                                                <div class="progress-bar bg-primary"
+                                                     style="width: @(part.RecommendationScore * 100)%"></div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (diagnosisResponse?.RecommendedTechnicians?.Any() == true)
+{
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5>Expert Technician Recommendations</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        @foreach (var tech in diagnosisResponse.RecommendedTechnicians.Take(6))
+                        {
+                            <div class="col-md-4 mb-3">
+                                <div class="card">
+                                    <div class="card-body">
+                                        <h6 class="card-title">@tech.Name</h6>
+                                        <div class="progress mb-2">
+                                            <div class="progress-bar @GetScoreClass(tech.Score)"
+                                                 style="width: @(tech.Score * 100)%">
+                                                @tech.Score.ToString("P1")
+                                            </div>
+                                        </div>
+                                        <small class="text-muted">
+                                            Skills: @tech.SkillsScore.ToString("P0") |
+                                            Distance: @tech.Distance.ToString("F1") km
+                                        </small>
+                                        @if (!string.IsNullOrEmpty(tech.Explanation))
+                                        {
+                                            <p class="small mt-2 text-info">@tech.Explanation</p>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private string selectedEquipmentType = "";
+    private string equipmentId = "EQUIP-001";
+    private string reportedSymptoms = "Compressor making loud noise and vibrating excessively. System not cooling properly.";
+    private string priority = "High";
+    private string reportedBy = "Facility Manager";
+    private bool includePartsRecommendations = true;
+    private bool includeTechnicianRecommendations = true;
+    private bool isLoading = false;
+    private string? errorMessage;
+
+    private FaultDiagnosisResponse? diagnosisResponse;
+
+    private async Task RunDiagnosis()
+    {
+        try
+        {
+            isLoading = true;
+            errorMessage = null;
+            StateHasChanged();
+
+            // Simulate the fault diagnosis service call
+            await Task.Delay(2000); // Simulate AI processing time
+
+            // Create a mock response for demonstration
+            diagnosisResponse = CreateMockDiagnosisResponse();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+            diagnosisResponse = null;
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private FaultDiagnosisResponse CreateMockDiagnosisResponse()
+    {
+        var response = new FaultDiagnosisResponse
+        {
+            DiagnosisId = Guid.NewGuid().ToString(),
+            TenantId = "demo-tenant",
+            EquipmentId = equipmentId,
+            ModelVersion = "v2.0.0",
+            GeneratedAt = DateTime.UtcNow
+        };
+
+        // Analyze symptoms to predict faults
+        var symptoms = reportedSymptoms.ToLower();
+
+        if (symptoms.Contains("compressor") && symptoms.Contains("noise"))
+        {
+            response.PossibleFaults.Add(new FaultPrediction
+            {
+                FaultId = "HVAC_001",
+                FaultCode = "H001",
+                FaultName = "Compressor Failure",
+                ProbabilityScore = 0.85,
+                Category = "Mechanical",
+                Severity = "Critical",
+                EstimatedResolutionTime = 240,
+                PredictedCause = "Mechanical wear due to age and usage",
+                DiagnosisExplanation = "High probability based on noise and vibration symptoms",
+                RequiredSkills = new List<string> { "HVAC Systems", "Compressor Repair" },
+                HistoricalSuccessRate = 0.78
+            });
+
+            response.RecommendedParts.AddRange(new[]
+            {
+                new PartRecommendation
+                {
+                    PartId = "P001", PartNumber = "COMP-001", PartName = "HVAC Compressor",
+                    RecommendationScore = 0.95, Quantity = 1, UnitCost = 1250.00m, TotalCost = 1250.00m,
+                    InStock = true, StockLevel = 3, ReasonForRecommendation = "Primary component replacement"
+                },
+                new PartRecommendation
+                {
+                    PartId = "P002", PartNumber = "CAP-001", PartName = "Start Capacitor",
+                    RecommendationScore = 0.80, Quantity = 1, UnitCost = 45.00m, TotalCost = 45.00m,
+                    InStock = true, StockLevel = 15, ReasonForRecommendation = "Commonly fails with compressor"
+                }
+            });
+        }
+
+        if (symptoms.Contains("cooling") || symptoms.Contains("temperature"))
+        {
+            response.PossibleFaults.Add(new FaultPrediction
+            {
+                FaultId = "HVAC_002",
+                FaultCode = "H002",
+                FaultName = "Refrigerant Leak",
+                ProbabilityScore = 0.65,
+                Category = "System",
+                Severity = "High",
+                EstimatedResolutionTime = 180,
+                PredictedCause = "System leak causing low refrigerant levels",
+                DiagnosisExplanation = "Secondary possibility given cooling issues",
+                RequiredSkills = new List<string> { "Refrigeration", "Leak Detection" },
+                HistoricalSuccessRate = 0.82
+            });
+        }
+
+        // Add expert technicians
+        response.RecommendedTechnicians.AddRange(new[]
+        {
+            new TechnicianRecommendation
+            {
+                TechnicianId = "TECH001", Name = "Alice Johnson", Score = 0.92,
+                SkillsScore = 0.95, Distance = 8.5, EstimatedTravelTime = 25,
+                Explanation = "HVAC specialist with 95% success rate on compressor repairs"
+            },
+            new TechnicianRecommendation
+            {
+                TechnicianId = "TECH003", Name = "Carol Williams", Score = 0.88,
+                SkillsScore = 0.90, Distance = 12.1, EstimatedTravelTime = 35,
+                Explanation = "Mechanical systems expert with extensive compressor experience"
+            }
+        });
+
+        response.EstimatedResolutionTimeMinutes = (int)response.PossibleFaults.Average(f => f.EstimatedResolutionTime);
+        response.EstimatedCost = response.RecommendedParts.Sum(p => p.TotalCost);
+
+        return response;
+    }
+
+    private string GetSeverityClass(string severity) => severity switch
+    {
+        "Critical" => "bg-danger",
+        "High" => "bg-warning",
+        "Medium" => "bg-primary",
+        "Low" => "bg-secondary",
+        _ => "bg-secondary"
+    };
+
+    private string GetProbabilityClass(double score) => score switch
+    {
+        >= 0.8 => "bg-success",
+        >= 0.6 => "bg-primary",
+        >= 0.4 => "bg-warning",
+        _ => "bg-danger"
+    };
+
+    private string GetScoreClass(double score) => score switch
+    {
+        >= 0.8 => "bg-success",
+        >= 0.6 => "bg-primary",
+        >= 0.4 => "bg-warning",
+        _ => "bg-danger"
+    };
+}

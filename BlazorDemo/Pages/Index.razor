@@ -1,0 +1,137 @@
+@page "/"
+
+<PageTitle>ML.NET Field Service Intelligence Platform</PageTitle>
+
+<!-- Hero Section -->
+<div class="jumbotron bg-gradient-primary text-white p-5 rounded-3 mb-5">
+    <div class="container">
+        <h1 class="display-4 fw-bold">ML.NET Field Service Intelligence</h1>
+        <p class="lead fs-4">Complete AI-powered platform for intelligent technician assignment, fault diagnosis, and performance analytics</p>
+        <hr class="my-4">
+        <p class="fs-5">Multi-tenant SaaS solution with tenant-specific ML models, historic data analysis, and real-time KPI tracking</p>
+    </div>
+</div>
+
+<!-- Main Features Cards -->
+<div class="row g-4 mb-5">
+    <div class="col-lg-4">
+        <div class="card h-100 shadow-sm border-0">
+            <div class="card-body text-center p-4">
+                <div class="text-primary mb-3">
+                    <i class="fas fa-robot fa-3x"></i>
+                </div>
+                <h4 class="card-title">ML.NET Recommendations</h4>
+                <p class="card-text">Advanced technician matching using machine learning models with multi-factor scoring including skills, distance, availability, and SLA history.</p>
+                <button class="btn btn-primary btn-lg" @onclick="NavigateToSimpleTest">
+                    Test ML.NET Engine
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card h-100 shadow-sm border-0">
+            <div class="card-body text-center p-4">
+                <div class="text-success mb-3">
+                    <i class="fas fa-tools fa-3x"></i>
+                </div>
+                <h4 class="card-title">AI Fault Diagnosis</h4>
+                <p class="card-text">Equipment-specific fault prediction with historic data analysis, predictive parts recommendations, and expert technician matching.</p>
+                <button class="btn btn-success btn-lg" @onclick="NavigateToFaultDiagnosis">
+                    Diagnose Equipment
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card h-100 shadow-sm border-0">
+            <div class="card-body text-center p-4">
+                <div class="text-info mb-3">
+                    <i class="fas fa-chart-line fa-3x"></i>
+                </div>
+                <h4 class="card-title">Performance Analytics</h4>
+                <p class="card-text">Comprehensive KPI tracking, fault specialization analysis, SLA compliance monitoring, and real-time performance metrics.</p>
+                <button class="btn btn-info btn-lg" @onclick="NavigateToKPIs">
+                    View Analytics
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Feature Highlights -->
+<div class="row mb-5">
+    <div class="col-12">
+        <h2 class="text-center mb-4">Platform Capabilities</h2>
+    </div>
+</div>
+
+<div class="row g-4 mb-5">
+    <div class="col-md-6">
+        <div class="card border-primary">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="fas fa-brain me-2"></i>Intelligent Predictions</h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled">
+                    <li class="mb-2"><i class="fas fa-check text-success me-2"></i><strong>ML.NET Models:</strong> Tenant-specific machine learning models</li>
+                    <li class="mb-2"><i class="fas fa-check text-success me-2"></i><strong>Fault Diagnosis:</strong> Equipment-specific fault prediction with historic data</li>
+                    <li class="mb-2"><i class="fas fa-check text-success me-2"></i><strong>Parts Intelligence:</strong> Predictive parts recommendations based on fault patterns</li>
+                    <li class="mb-0"><i class="fas fa-check text-success me-2"></i><strong>Cost Optimization:</strong> Automated cost estimation and parts sourcing</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card border-info">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="fas fa-analytics me-2"></i>Performance Tracking</h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled">
+                    <li class="mb-2"><i class="fas fa-check text-success me-2"></i><strong>Real-time KPIs:</strong> Performance tracking and specialization analysis</li>
+                    <li class="mb-2"><i class="fas fa-check text-success me-2"></i><strong>SLA Compliance:</strong> Automated tracking and success rate monitoring</li>
+                    <li class="mb-2"><i class="fas fa-check text-success me-2"></i><strong>Customer Satisfaction:</strong> Feedback integration and trend analysis</li>
+                    <li class="mb-0"><i class="fas fa-check text-success me-2"></i><strong>Revenue Tracking:</strong> Financial performance and utilization metrics</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Technical Architecture -->
+<div class="row">
+    <div class="col-12">
+        <div class="card border-secondary">
+            <div class="card-header bg-secondary text-white">
+                <h5 class="mb-0"><i class="fas fa-cogs me-2"></i>Production-Ready Architecture</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <h6><i class="fas fa-cube text-primary me-2"></i>Injectable Services</h6>
+                        <p class="text-muted">Production-ready microservices architecture with easy DI integration</p>
+                    </div>
+                    <div class="col-md-4">
+                        <h6><i class="fas fa-users text-success me-2"></i>Multi-tenant Support</h6>
+                        <p class="text-muted">Complete tenant isolation with dedicated models and data</p>
+                    </div>
+                    <div class="col-md-4">
+                        <h6><i class="fas fa-tachometer-alt text-info me-2"></i>Real-time Processing</h6>
+                        <p class="text-muted">Instant recommendations and live performance monitoring</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Inject] private NavigationManager Navigation { get; set; } = default!;
+
+    private void NavigateToSimpleTest() => Navigation.NavigateTo("/simple-test");
+    private void NavigateToFaultDiagnosis() => Navigation.NavigateTo("/fault-diagnosis");
+    private void NavigateToKPIs() => Navigation.NavigateTo("/technician-kpis");
+}

@@ -1,0 +1,457 @@
+@page "/fleet-map"
+@inject IJSRuntime JSRuntime
+@inject IDemoDataService DemoDataService
+@inject IGoogleMapsService GoogleMapsService
+@inject ITrafficAwareRoutingService TrafficRoutingService
+@inject ITechnicianTrackingService TrackingService
+@implements IDisposable
+
+<PageTitle>Live Fleet Tracking Map</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h3>🗺️ Live Fleet Tracking & Traffic Map</h3>
+    <div class="d-flex align-items-center">
+        <div class="form-check form-switch me-3">
+            <input class="form-check-input" type="checkbox" id="trafficToggle" @bind="showTraffic" @bind:after="ToggleTrafficLayer">
+            <label class="form-check-label" for="trafficToggle">
+                Show Traffic
+            </label>
+        </div>
+        <div class="form-check form-switch me-3">
+            <input class="form-check-input" type="checkbox" id="incidentsToggle" @bind="showIncidents" @bind:after="ToggleIncidents">
+            <label class="form-check-label" for="incidentsToggle">
+                Show Incidents
+            </label>
+        </div>
+        <div class="form-check form-switch me-3">
+            <input class="form-check-input" type="checkbox" id="jobsToggle" @bind="showJobs" @bind:after="ToggleJobs">
+            <label class="form-check-label" for="jobsToggle">
+                Show Jobs
+            </label>
+        </div>
+        <button class="btn btn-primary btn-sm" @onclick="RefreshMap">
+            <i class="fas fa-sync-alt me-1"></i>Refresh
+        </button>
+    </div>
+</div>
+
+<div class="alert alert-info">
+    <h6><i class="fas fa-info-circle me-2"></i>Interactive Fleet Map Features</h6>
+    <div class="row">
+        <div class="col-md-6">
+            <small>
+                • <strong>🚐 Van Icons:</strong> Color-coded by technician, status border<br/>
+                • <strong>📍 Job Markers:</strong> Service call locations with priority<br/>
+                • <strong>🛣️ Traffic Layer:</strong> Live traffic conditions
+            </small>
+        </div>
+        <div class="col-md-6">
+            <small>
+                • <strong>🚧 Incident Markers:</strong> Road closures & accidents<br/>
+                • <strong>🚨 Emergency Jobs:</strong> Red markers for urgent calls<br/>
+                • <strong>⚡ Emergency Routing:</strong> Fastest paths for urgent jobs
+            </small>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fas fa-map me-2"></i>Fleet Map</h5>
+                <small class="text-muted">Last updated: @lastUpdateTime.ToString("HH:mm:ss")</small>
+            </div>
+            <div class="card-body p-0">
+                <div id="fleetMap" style="height: 600px; width: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); position: relative; overflow: hidden;">
+                    <!-- Static Fleet Visualization -->
+                    <div class="position-absolute w-100 h-100">
+                        <!-- Grid Background -->
+                        <div style="background-image: repeating-linear-gradient(0deg, rgba(255,255,255,0.1), rgba(255,255,255,0.1) 1px, transparent 1px, transparent 20px), repeating-linear-gradient(90deg, rgba(255,255,255,0.1), rgba(255,255,255,0.1) 1px, transparent 1px, transparent 20px); width: 100%; height: 100%;"></div>
+
+                        <!-- NYC Area Label -->
+                        <div class="position-absolute" style="top: 20px; left: 20px; color: white; font-weight: bold; text-shadow: 2px 2px 4px rgba(0,0,0,0.5);">
+                            <h5><i class="fas fa-map-marker-alt me-2"></i>NYC Metropolitan Area</h5>
+                        </div>
+
+                        <!-- Traffic Status -->
+                        <div class="position-absolute" style="top: 20px; right: 20px; background: rgba(0,0,0,0.7); color: white; padding: 10px; border-radius: 8px;">
+                            <div><i class="fas fa-traffic-light me-2"></i>Traffic: @GetOverallTrafficCondition()</div>
+                            <div><small>@trafficIncidents.Count incidents detected</small></div>
+                        </div>
+
+                        <!-- Static Fleet Positions -->
+                        <div class="position-relative w-100 h-100">
+                            @foreach (var tech in activeTechnicians.Take(8))
+                            {
+                                var left = 15 + (activeTechnicians.IndexOf(tech) % 4) * 20;
+                                var top = 30 + (activeTechnicians.IndexOf(tech) / 4) * 25;
+                                <div class="position-absolute" style="left: @(left)%; top: @(top)%; transform: translate(-50%, -50%);">
+                                    <div class="text-center">
+                                        <div style="width: 40px; height: 40px; background: @GetTechnicianColor(tech.CurrentStatus.Status); border: 3px solid white; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 8px rgba(0,0,0,0.3); font-weight: bold; color: white; margin: 0 auto;">
+                                            <i class="fas fa-van"></i>
+                                        </div>
+                                        <small style="background: rgba(0,0,0,0.7); color: white; padding: 2px 6px; border-radius: 4px; white-space: nowrap; margin-top: 5px; display: inline-block;">@tech.Name.Split(' ')[0]</small>
+                                        <div class="badge @GetStatusBadgeClass(tech.CurrentStatus.Status)" style="font-size: 0.7em; margin-top: 2px;">@tech.CurrentStatus.Status</div>
+                                    </div>
+                                </div>
+                            }
+
+                            <!-- Static Job Markers -->
+                            @foreach (var job in activeJobs.Take(6))
+                            {
+                                var left = 25 + (activeJobs.IndexOf(job) % 3) * 25;
+                                var top = 20 + (activeJobs.IndexOf(job) / 3) * 30;
+                                <div class="position-absolute" style="left: @(left)%; top: @(top)%; transform: translate(-50%, -50%);">
+                                    <div class="text-center">
+                                        <div style="width: 24px; height: 24px; background: @GetJobPriorityColor(job.Priority); border: 2px solid white; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 4px rgba(0,0,0,0.3); margin: 0 auto;">
+                                            @if (job.IsEmergency) { <span style="color: white; font-size: 10px;">🚨</span> } else { <span style="color: white; font-size: 8px;">📍</span> }
+                                        </div>
+                                        <small style="background: rgba(0,0,0,0.6); color: white; padding: 1px 4px; border-radius: 3px; white-space: nowrap; margin-top: 2px; display: inline-block; font-size: 0.7em;">@job.Priority</small>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+
+                        <!-- Legend -->
+                        <div class="position-absolute" style="bottom: 20px; left: 20px; background: rgba(0,0,0,0.8); color: white; padding: 15px; border-radius: 8px; font-size: 0.9em;">
+                            <div class="mb-2"><strong>Fleet Status Legend</strong></div>
+                            <div class="mb-1"><span style="display: inline-block; width: 12px; height: 12px; background: #28a745; border-radius: 50%; margin-right: 8px;"></span>Available</div>
+                            <div class="mb-1"><span style="display: inline-block; width: 12px; height: 12px; background: #ffc107; border-radius: 50%; margin-right: 8px;"></span>En Route</div>
+                            <div class="mb-1"><span style="display: inline-block; width: 12px; height: 12px; background: #17a2b8; border-radius: 50%; margin-right: 8px;"></span>On Site</div>
+                            <div><span style="display: inline-block; width: 12px; height: 12px; background: #dc3545; border-radius: 50%; margin-right: 8px;"></span>Busy</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card mb-3">
+            <div class="card-header">
+                <h6><i class="fas fa-users me-2"></i>Active Technicians (@activeTechnicians.Count)</h6>
+            </div>
+            <div class="card-body" style="max-height: 300px; overflow-y: auto;">
+                @foreach (var tech in activeTechnicians)
+                {
+                    <div class="d-flex align-items-center mb-2 p-2 border rounded">
+                        <div class="me-2">
+                            <i class="fas fa-van" style="color: @GetTechnicianColor(tech.CurrentStatus.Status);"></i>
+                        </div>
+                        <div class="flex-grow-1">
+                            <div class="fw-bold">@tech.Name</div>
+                            <small class="text-muted">@tech.TechnicianId</small>
+                        </div>
+                        <div class="text-end">
+                            <span class="badge @GetStatusBadgeClass(tech.CurrentStatus.Status)">
+                                @tech.CurrentStatus.Status
+                            </span>
+                            @if (tech.CurrentStatus.Status == "EnRoute" && tech.CurrentStatus.EstimatedArrivalMinutes > 0)
+                            {
+                                <div><small>ETA: @tech.CurrentStatus.EstimatedArrivalMinutes.ToString("F0")m</small></div>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-header">
+                <h6><i class="fas fa-briefcase me-2"></i>Active Jobs (@activeJobs.Count)</h6>
+            </div>
+            <div class="card-body" style="max-height: 200px; overflow-y: auto;">
+                @if (activeJobs.Any())
+                {
+                    @foreach (var job in activeJobs.Take(5))
+                    {
+                        <div class="alert @GetJobAlertClass(job.Priority) py-2 mb-2">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div class="flex-grow-1">
+                                    <strong>@job.ServiceType</strong>
+                                    @if (job.IsEmergency)
+                                    {
+                                        <span class="badge bg-danger ms-2">🚨 EMERGENCY</span>
+                                    }
+                                    <div><small>@job.Location</small></div>
+                                    <div><small>@job.CustomerName</small></div>
+                                </div>
+                                <span class="badge @GetJobPriorityBadgeClass(job.Priority)">
+                                    @job.Priority
+                                </span>
+                            </div>
+                        </div>
+                    }
+                }
+                else
+                {
+                    <div class="text-muted text-center">
+                        <i class="fas fa-clipboard-list me-2"></i>No active jobs
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-header">
+                <h6><i class="fas fa-exclamation-triangle me-2"></i>Traffic Incidents (@trafficIncidents.Count)</h6>
+            </div>
+            <div class="card-body" style="max-height: 200px; overflow-y: auto;">
+                @if (trafficIncidents.Any())
+                {
+                    @foreach (var incident in trafficIncidents.Take(5))
+                    {
+                        <div class="alert @GetIncidentAlertClass(incident.Severity) py-2 mb-2">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <strong>@incident.Type</strong>
+                                    <div><small>@incident.Description</small></div>
+                                </div>
+                                <span class="badge @GetSeverityBadgeClass(incident.Severity)">
+                                    @incident.Severity
+                                </span>
+                            </div>
+                        </div>
+                    }
+                }
+                else
+                {
+                    <div class="text-muted text-center">
+                        <i class="fas fa-check-circle me-2"></i>No active incidents
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h6><i class="fas fa-tachometer-alt me-2"></i>Fleet Status</h6>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-6">
+                        <div class="h4 text-success">@activeTechnicians.Count(t => t.CurrentStatus.Status == "Available")</div>
+                        <small>Available</small>
+                    </div>
+                    <div class="col-6">
+                        <div class="h4 text-warning">@activeTechnicians.Count(t => t.CurrentStatus.Status == "EnRoute")</div>
+                        <small>En Route</small>
+                    </div>
+                </div>
+                <div class="row text-center mt-2">
+                    <div class="col-6">
+                        <div class="h4 text-info">@activeTechnicians.Count(t => t.CurrentStatus.Status == "OnSite")</div>
+                        <small>On Site</small>
+                    </div>
+                    <div class="col-6">
+                        <div class="h4 text-danger">@activeTechnicians.Count(t => t.CurrentStatus.Status == "Busy")</div>
+                        <small>Busy</small>
+                    </div>
+                </div>
+
+                <hr />
+
+                <div class="d-flex justify-content-between align-items-center">
+                    <small>Average ETA:</small>
+                    <strong>@GetAverageETA() min</strong>
+                </div>
+                <div class="d-flex justify-content-between align-items-center">
+                    <small>Traffic Conditions:</small>
+                    <span class="badge @GetOverallTrafficBadgeClass()">@GetOverallTrafficCondition()</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<Technician> activeTechnicians = new();
+    private List<TrafficIncident> trafficIncidents = new();
+    private List<JobRequest> activeJobs = new();
+    private bool showTraffic = true;
+    private bool showIncidents = true;
+    private bool showJobs = true;
+    private bool isMapLoading = true;
+    private bool isDisposed = false;
+    private bool isMapInitialized = false;
+    private DateTime lastUpdateTime = DateTime.Now;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadInitialData();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !isDisposed)
+        {
+            // Skip JavaScript initialization to avoid DOM conflicts
+            isMapLoading = false;
+            isMapInitialized = true;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task LoadInitialData()
+    {
+        try
+        {
+            activeTechnicians = DemoDataService.GetSampleTechnicians()
+                .Where(t => t.CurrentStatus.Status != "Offline")
+                .ToList();
+
+            // Get traffic incidents for NYC area
+            trafficIncidents = await TrafficRoutingService.GetTrafficIncidentsAsync(40.7128, -74.0060, 25);
+
+            // Get active jobs
+            activeJobs = DemoDataService.GetActiveJobs();
+
+            lastUpdateTime = DateTime.Now;
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            // Log error
+            Console.WriteLine($"Error loading initial data: {ex.Message}");
+        }
+    }
+
+
+
+    public void Dispose()
+    {
+        isDisposed = true;
+        isMapInitialized = false;
+        // Skip JavaScript cleanup to avoid DOM conflicts
+    }
+
+
+    private async Task ToggleTrafficLayer()
+    {
+        // Static toggle - just update state
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task ToggleIncidents()
+    {
+        // Static toggle - just update state
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task ToggleJobs()
+    {
+        // Static toggle - just update state
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task RefreshMap()
+    {
+        try
+        {
+            await LoadInitialData();
+            // No JavaScript calls needed for static display
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error refreshing map: {ex.Message}");
+        }
+    }
+
+    private string GetJobPriorityColor(string priority) => priority switch
+    {
+        "Low" => "#28a745",
+        "Normal" => "#17a2b8",
+        "High" => "#ffc107",
+        "Urgent" => "#dc3545",
+        _ => "#6c757d"
+    };
+
+    private string GetTechnicianColor(string status) => status switch
+    {
+        "Available" => "#28a745",
+        "EnRoute" => "#ffc107",
+        "OnSite" => "#17a2b8",
+        "Busy" => "#dc3545",
+        _ => "#6c757d"
+    };
+
+    private string GetStatusBadgeClass(string status) => status switch
+    {
+        "Available" => "bg-success",
+        "EnRoute" => "bg-warning text-dark",
+        "OnSite" => "bg-info",
+        "Busy" => "bg-danger",
+        _ => "bg-secondary"
+    };
+
+    private string GetIncidentAlertClass(IncidentSeverity severity) => severity switch
+    {
+        IncidentSeverity.Critical => "alert-danger",
+        IncidentSeverity.High => "alert-warning",
+        IncidentSeverity.Medium => "alert-info",
+        IncidentSeverity.Low => "alert-light",
+        _ => "alert-secondary"
+    };
+
+    private string GetSeverityBadgeClass(IncidentSeverity severity) => severity switch
+    {
+        IncidentSeverity.Critical => "bg-danger",
+        IncidentSeverity.High => "bg-warning text-dark",
+        IncidentSeverity.Medium => "bg-info",
+        IncidentSeverity.Low => "bg-light text-dark",
+        _ => "bg-secondary"
+    };
+
+    private double GetAverageETA()
+    {
+        var enRouteTechs = activeTechnicians.Where(t =>
+            t.CurrentStatus.Status == "EnRoute" && t.CurrentStatus.EstimatedArrivalMinutes > 0).ToList();
+
+        return enRouteTechs.Any() ? enRouteTechs.Average(t => t.CurrentStatus.EstimatedArrivalMinutes) : 0;
+    }
+
+    private string GetOverallTrafficCondition()
+    {
+        var severeCounts = trafficIncidents.Count(i => i.Severity >= IncidentSeverity.High);
+        var totalIncidents = trafficIncidents.Count;
+
+        return (severeCounts, totalIncidents) switch
+        {
+            (0, 0) => "Clear",
+            (0, <= 2) => "Light",
+            (>= 1, _) or (0, <= 5) => "Moderate",
+            _ => "Heavy"
+        };
+    }
+
+    private string GetOverallTrafficBadgeClass()
+    {
+        return GetOverallTrafficCondition() switch
+        {
+            "Clear" => "bg-success",
+            "Light" => "bg-info",
+            "Moderate" => "bg-warning text-dark",
+            "Heavy" => "bg-danger",
+            _ => "bg-secondary"
+        };
+    }
+
+    private string GetJobAlertClass(string priority) => priority switch
+    {
+        "Urgent" => "alert-danger",
+        "High" => "alert-warning",
+        "Normal" => "alert-info",
+        "Low" => "alert-light",
+        _ => "alert-secondary"
+    };
+
+    private string GetJobPriorityBadgeClass(string priority) => priority switch
+    {
+        "Urgent" => "bg-danger",
+        "High" => "bg-warning text-dark",
+        "Normal" => "bg-info",
+        "Low" => "bg-light text-dark",
+        _ => "bg-secondary"
+    };
+}
