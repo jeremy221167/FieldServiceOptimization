@@ -1,0 +1,410 @@
+@page "/technician-kpis"
+@inject IDemoDataService DemoDataService
+
+<PageTitle>Technician KPIs - Performance Analytics</PageTitle>
+
+<h3>Technician Performance Dashboard</h3>
+<p class="lead">Real-time KPI tracking, fault specialization analysis, and performance metrics</p>
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <h5 class="card-title text-primary">@totalTechnicians</h5>
+                <p class="card-text">Active Technicians</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <h5 class="card-title text-success">@avgSlaRate.ToString("P1")</h5>
+                <p class="card-text">Avg SLA Compliance</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <h5 class="card-title text-info">@avgResolutionTime.ToString("F0") min</h5>
+                <p class="card-text">Avg Resolution Time</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <h5 class="card-title text-warning">@avgCustomerSat.ToString("F1")/10</h5>
+                <p class="card-text">Customer Satisfaction</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5>Technician Performance Rankings</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Rank</th>
+                                <th>Technician</th>
+                                <th>Jobs Completed</th>
+                                <th>SLA Compliance</th>
+                                <th>Avg Resolution</th>
+                                <th>Customer Sat</th>
+                                <th>Specialization</th>
+                                <th>Performance</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (technicianKPIs != null)
+                            {
+                                @for (int i = 0; i < technicianKPIs.Count; i++)
+                                {
+                                    var kpi = technicianKPIs[i];
+                                    <tr>
+                                        <td>
+                                            <span class="badge @GetRankBadgeClass(i + 1)">@(i + 1)</span>
+                                        </td>
+                                        <td>
+                                            <strong>@GetTechnicianName(kpi.TechnicianId)</strong>
+                                            <br>
+                                            <small class="text-muted">@kpi.TechnicianId</small>
+                                        </td>
+                                        <td>@kpi.TotalJobsCompleted</td>
+                                        <td>
+                                            <div class="progress" style="width: 80px; height: 20px;">
+                                                <div class="progress-bar @GetSlaClass(kpi.SlaComplianceRate)"
+                                                     style="width: @(kpi.SlaComplianceRate * 100)%">
+                                                    @kpi.SlaComplianceRate.ToString("P0")
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td>@kpi.AverageResolutionTimeMinutes.ToString("F0") min</td>
+                                        <td>
+                                            <span class="badge @GetSatisfactionClass(kpi.AverageCustomerSatisfaction)">
+                                                @kpi.AverageCustomerSatisfaction.ToString("F1")
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <small>@GetSpecializationArea(kpi.TechnicianId)</small>
+                                        </td>
+                                        <td>
+                                            <div class="progress" style="width: 60px; height: 15px;">
+                                                <div class="progress-bar @GetPerformanceClass(kpi.SlaComplianceRate, kpi.AverageCustomerSatisfaction)"
+                                                     style="width: @(GetOverallPerformance(kpi) * 100)%"></div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5>Fault Type Expertise</h5>
+            </div>
+            <div class="card-body">
+                @if (faultTypeStats != null)
+                {
+                    @foreach (var faultStat in faultTypeStats)
+                    {
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between">
+                                <small><strong>@GetFaultTypeName(faultStat.Key)</strong></small>
+                                <small>@faultStat.Value experts</small>
+                            </div>
+                            <div class="progress" style="height: 10px;">
+                                <div class="progress-bar bg-info"
+                                     style="width: @(faultStat.Value * 100.0 / totalTechnicians)%"></div>
+                            </div>
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5>Top Performers This Month</h5>
+            </div>
+            <div class="card-body">
+                @if (technicianKPIs != null)
+                {
+                    @foreach (var kpi in technicianKPIs.Take(3))
+                    {
+                        <div class="d-flex align-items-center mb-3">
+                            <div class="me-3">
+                                <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center"
+                                     style="width: 40px; height: 40px;">
+                                    @GetTechnicianInitials(kpi.TechnicianId)
+                                </div>
+                            </div>
+                            <div class="flex-grow-1">
+                                <h6 class="mb-0">@GetTechnicianName(kpi.TechnicianId)</h6>
+                                <small class="text-muted">
+                                    @kpi.SlaComplianceRate.ToString("P1") SLA |
+                                    @kpi.AverageCustomerSatisfaction.ToString("F1") rating
+                                </small>
+                            </div>
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5>Detailed Performance Metrics</h5>
+            </div>
+            <div class="card-body">
+                @if (selectedTechnicianKPI != null)
+                {
+                    <h6>@GetTechnicianName(selectedTechnicianKPI.TechnicianId) - Detailed Analysis</h6>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6 class="mt-3">Fault Type Success Rates</h6>
+                            @foreach (var faultRate in selectedTechnicianKPI.FaultTypeSuccessRates)
+                            {
+                                <div class="mb-2">
+                                    <div class="d-flex justify-content-between">
+                                        <small>@GetFaultTypeName(faultRate.Key)</small>
+                                        <small>@faultRate.Value.ToString("P1")</small>
+                                    </div>
+                                    <div class="progress" style="height: 8px;">
+                                        <div class="progress-bar @GetSuccessRateClass(faultRate.Value)"
+                                             style="width: @(faultRate.Value * 100)%"></div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="mt-3">Equipment Expertise</h6>
+                            @foreach (var equipment in selectedTechnicianKPI.TopPerformingEquipmentTypes)
+                            {
+                                <span class="badge bg-secondary me-1 mb-1">@equipment</span>
+                            }
+
+                            <h6 class="mt-3">Key Metrics</h6>
+                            <ul class="list-unstyled">
+                                <li><strong>First Call Resolution:</strong> @selectedTechnicianKPI.FirstCallResolutionRate.ToString("P1")</li>
+                                <li><strong>Callback Rate:</strong> @selectedTechnicianKPI.CallbackRate.ToString("P1")</li>
+                                <li><strong>Utilization Rate:</strong> @selectedTechnicianKPI.UtilizationRate.ToString("P1")</li>
+                                <li><strong>Revenue Generated:</strong> $@selectedTechnicianKPI.TotalRevenue.ToString("N0")</li>
+                                <li><strong>Certifications Earned:</strong> @selectedTechnicianKPI.CertificationsEarned</li>
+                            </ul>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <p class="text-muted">Click on a technician above to view detailed metrics</p>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<TechnicianKPI> technicianKPIs = new();
+    private TechnicianKPI? selectedTechnicianKPI;
+    private Dictionary<string, int> faultTypeStats = new();
+    private int totalTechnicians;
+    private double avgSlaRate;
+    private double avgResolutionTime;
+    private double avgCustomerSat;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadKPIData();
+    }
+
+    private async Task LoadKPIData()
+    {
+        // Generate sample KPI data
+        await Task.CompletedTask;
+
+        var technicianIds = new[] { "TECH001", "TECH002", "TECH003", "TECH004", "TECH005", "TECH006" };
+        technicianKPIs = new List<TechnicianKPI>();
+
+        foreach (var techId in technicianIds)
+        {
+            var random = new Random(techId.GetHashCode());
+            var totalJobs = random.Next(15, 50);
+            var slaJobs = (int)(totalJobs * (0.7 + random.NextDouble() * 0.25));
+
+            var kpi = new TechnicianKPI
+            {
+                TechnicianId = techId,
+                PeriodStart = DateTime.UtcNow.AddDays(-30),
+                PeriodEnd = DateTime.UtcNow,
+                TotalJobsCompleted = totalJobs,
+                SlaJobsCompleted = slaJobs,
+                SlaComplianceRate = (double)slaJobs / totalJobs,
+                AverageResolutionTimeMinutes = 90 + random.NextDouble() * 120,
+                FirstCallResolutionRate = 0.6 + random.NextDouble() * 0.35,
+                AverageCustomerSatisfaction = 7.5 + random.NextDouble() * 2.0,
+                TotalRevenue = random.Next(15000, 45000),
+                CallbackJobs = random.Next(0, totalJobs / 10),
+                UtilizationRate = 0.75 + random.NextDouble() * 0.2,
+                CertificationsEarned = random.Next(0, 3),
+                FaultTypeSuccessRates = GenerateFaultTypeSuccessRates(random),
+                TopPerformingEquipmentTypes = GenerateTopEquipmentTypes(random)
+            };
+
+            kpi.CallbackRate = (double)kpi.CallbackJobs / kpi.TotalJobsCompleted;
+            technicianKPIs.Add(kpi);
+        }
+
+        // Sort by SLA compliance rate
+        technicianKPIs = technicianKPIs.OrderByDescending(k => k.SlaComplianceRate).ToList();
+
+        // Calculate summary statistics
+        totalTechnicians = technicianKPIs.Count;
+        avgSlaRate = technicianKPIs.Average(k => k.SlaComplianceRate);
+        avgResolutionTime = technicianKPIs.Average(k => k.AverageResolutionTimeMinutes);
+        avgCustomerSat = technicianKPIs.Average(k => k.AverageCustomerSatisfaction);
+
+        // Generate fault type expertise statistics
+        faultTypeStats = new Dictionary<string, int>
+        {
+            ["HVAC_001"] = technicianKPIs.Count(k => k.FaultTypeSuccessRates.GetValueOrDefault("HVAC_001", 0) > 0.7),
+            ["HVAC_002"] = technicianKPIs.Count(k => k.FaultTypeSuccessRates.GetValueOrDefault("HVAC_002", 0) > 0.7),
+            ["ELEC_001"] = technicianKPIs.Count(k => k.FaultTypeSuccessRates.GetValueOrDefault("ELEC_001", 0) > 0.7),
+            ["ELEC_002"] = technicianKPIs.Count(k => k.FaultTypeSuccessRates.GetValueOrDefault("ELEC_002", 0) > 0.7),
+            ["MECH_001"] = technicianKPIs.Count(k => k.FaultTypeSuccessRates.GetValueOrDefault("MECH_001", 0) > 0.7)
+        };
+
+        selectedTechnicianKPI = technicianKPIs.FirstOrDefault();
+    }
+
+    private Dictionary<string, double> GenerateFaultTypeSuccessRates(Random random)
+    {
+        return new Dictionary<string, double>
+        {
+            ["HVAC_001"] = 0.6 + random.NextDouble() * 0.35,
+            ["HVAC_002"] = 0.55 + random.NextDouble() * 0.4,
+            ["ELEC_001"] = 0.65 + random.NextDouble() * 0.3,
+            ["ELEC_002"] = 0.5 + random.NextDouble() * 0.45,
+            ["MECH_001"] = 0.7 + random.NextDouble() * 0.25
+        };
+    }
+
+    private List<string> GenerateTopEquipmentTypes(Random random)
+    {
+        var equipmentTypes = new[] { "HVAC Units", "Electrical Panels", "Motors", "Pumps", "Chillers" };
+        return equipmentTypes.OrderBy(x => random.Next()).Take(3).ToList();
+    }
+
+    private string GetTechnicianName(string technicianId) => technicianId switch
+    {
+        "TECH001" => "Alice Johnson",
+        "TECH002" => "Bob Smith",
+        "TECH003" => "Carol Williams",
+        "TECH004" => "David Brown",
+        "TECH005" => "Emma Davis",
+        "TECH006" => "Frank Wilson",
+        _ => technicianId
+    };
+
+    private string GetTechnicianInitials(string technicianId) => technicianId switch
+    {
+        "TECH001" => "AJ",
+        "TECH002" => "BS",
+        "TECH003" => "CW",
+        "TECH004" => "DB",
+        "TECH005" => "ED",
+        "TECH006" => "FW",
+        _ => "TT"
+    };
+
+    private string GetSpecializationArea(string technicianId) => technicianId switch
+    {
+        var id when id.EndsWith("1") => "HVAC Systems",
+        var id when id.EndsWith("2") => "Electrical",
+        var id when id.EndsWith("3") => "Mechanical",
+        _ => "General"
+    };
+
+    private string GetFaultTypeName(string faultId) => faultId switch
+    {
+        "HVAC_001" => "Compressor Failure",
+        "HVAC_002" => "Refrigerant Leak",
+        "HVAC_003" => "Filter Blockage",
+        "ELEC_001" => "Circuit Breaker",
+        "ELEC_002" => "Wiring Fault",
+        "MECH_001" => "Motor Bearing",
+        _ => faultId
+    };
+
+    private string GetRankBadgeClass(int rank) => rank switch
+    {
+        1 => "bg-warning",
+        2 => "bg-secondary",
+        3 => "bg-success",
+        _ => "bg-primary"
+    };
+
+    private string GetSlaClass(double rate) => rate switch
+    {
+        >= 0.9 => "bg-success",
+        >= 0.8 => "bg-primary",
+        >= 0.7 => "bg-warning",
+        _ => "bg-danger"
+    };
+
+    private string GetSatisfactionClass(double rating) => rating switch
+    {
+        >= 9.0 => "bg-success",
+        >= 8.0 => "bg-primary",
+        >= 7.0 => "bg-warning",
+        _ => "bg-danger"
+    };
+
+    private string GetSuccessRateClass(double rate) => rate switch
+    {
+        >= 0.8 => "bg-success",
+        >= 0.6 => "bg-primary",
+        >= 0.4 => "bg-warning",
+        _ => "bg-danger"
+    };
+
+    private string GetPerformanceClass(double slaRate, double customerSat)
+    {
+        var performance = GetOverallPerformance(new TechnicianKPI
+        {
+            SlaComplianceRate = slaRate,
+            AverageCustomerSatisfaction = customerSat
+        });
+
+        return performance switch
+        {
+            >= 0.8 => "bg-success",
+            >= 0.6 => "bg-primary",
+            >= 0.4 => "bg-warning",
+            _ => "bg-danger"
+        };
+    }
+
+    private double GetOverallPerformance(TechnicianKPI kpi)
+    {
+        var normalizedSat = kpi.AverageCustomerSatisfaction / 10.0;
+        return (kpi.SlaComplianceRate * 0.6) + (normalizedSat * 0.4);
+    }
+}

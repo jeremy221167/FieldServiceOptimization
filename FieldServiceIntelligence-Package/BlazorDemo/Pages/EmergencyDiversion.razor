@@ -1,0 +1,330 @@
+@page "/emergency-diversion"
+@inject IDemoDataService DemoDataService
+@inject IEmergencyDiversionService DiversionService
+@inject ITechnicianTrackingService TrackingService
+@inject INotificationService NotificationService
+
+<PageTitle>Emergency Diversion System</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h3>🚨 Emergency Job Diversion System</h3>
+    <div class="badge bg-danger fs-6">Emergency Response Active</div>
+</div>
+
+<div class="alert alert-warning">
+    <h5><i class="fas fa-exclamation-triangle me-2"></i>Emergency Scenario Simulation</h5>
+    <p>This demo shows how the system handles emergency job assignments by finding the best technician to divert, factoring in current assignments, skills, location, and interruption costs.</p>
+</div>
+
+<div class="mb-3">
+    <button class="btn btn-danger btn-lg" @onclick="SimulateEmergency" disabled="@isProcessing">
+        @if (isProcessing)
+        {
+            <span class="spinner-border spinner-border-sm me-2"></span>
+        }
+        <i class="fas fa-bolt me-2"></i>Simulate Emergency Job
+    </button>
+</div>
+
+@if (emergencyJob != null)
+{
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card border-danger">
+                <div class="card-header bg-danger text-white">
+                    <h5><i class="fas fa-exclamation-circle me-2"></i>Emergency Job Details</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-sm-6"><strong>Job ID:</strong></div>
+                        <div class="col-sm-6">@emergencyJob.JobId</div>
+                    </div>
+                    <div class="row">
+                        <div class="col-sm-6"><strong>Service:</strong></div>
+                        <div class="col-sm-6">@emergencyJob.ServiceType</div>
+                    </div>
+                    <div class="row">
+                        <div class="col-sm-6"><strong>Equipment:</strong></div>
+                        <div class="col-sm-6">@emergencyJob.Equipment</div>
+                    </div>
+                    <div class="row">
+                        <div class="col-sm-6"><strong>Location:</strong></div>
+                        <div class="col-sm-6">@emergencyJob.Location</div>
+                    </div>
+                    <div class="row">
+                        <div class="col-sm-6"><strong>Priority:</strong></div>
+                        <div class="col-sm-6"><span class="badge bg-danger">@emergencyJob.Priority</span></div>
+                    </div>
+                    <div class="row">
+                        <div class="col-sm-6"><strong>SLA Hours:</strong></div>
+                        <div class="col-sm-6">@emergencyJob.SlaHours</div>
+                    </div>
+                    <div class="row">
+                        <div class="col-sm-6"><strong>Customer:</strong></div>
+                        <div class="col-sm-6">@emergencyJob.CustomerName</div>
+                    </div>
+                    <div class="row">
+                        <div class="col-sm-6"><strong>Phone:</strong></div>
+                        <div class="col-sm-6">@emergencyJob.CustomerPhone</div>
+                    </div>
+
+                    @if (emergencyJob.RequiredSkills.Any())
+                    {
+                        <div class="mt-3">
+                            <h6>Required Skills:</h6>
+                            @foreach (var skill in emergencyJob.RequiredSkills)
+                            {
+                                <span class="badge bg-secondary me-1">@skill.Key (Level @skill.Value)</span>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            @if (diversionResponse != null)
+            {
+                <div class="card border-success">
+                    <div class="card-header bg-success text-white">
+                        <h5><i class="fas fa-check-circle me-2"></i>Diversion Result</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row mb-2">
+                            <div class="col-sm-6"><strong>Selected Technician:</strong></div>
+                            <div class="col-sm-6">@diversionResponse.RecommendedTechnician.Name</div>
+                        </div>
+                        <div class="row mb-2">
+                            <div class="col-sm-6"><strong>Technician ID:</strong></div>
+                            <div class="col-sm-6">@diversionResponse.RecommendedTechnician.TechnicianId</div>
+                        </div>
+                        <div class="row mb-2">
+                            <div class="col-sm-6"><strong>Score:</strong></div>
+                            <div class="col-sm-6">
+                                <div class="progress" style="height: 20px;">
+                                    <div class="progress-bar bg-success" style="width: @(diversionResponse.RecommendedTechnician.Score * 100)%">
+                                        @diversionResponse.RecommendedTechnician.Score.ToString("P1")
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row mb-2">
+                            <div class="col-sm-6"><strong>Diversion Type:</strong></div>
+                            <div class="col-sm-6">
+                                <span class="badge @GetDiversionTypeClass(diversionResponse.DiversionType)">
+                                    @diversionResponse.DiversionType
+                                </span>
+                            </div>
+                        </div>
+                        <div class="row mb-2">
+                            <div class="col-sm-6"><strong>Distance:</strong></div>
+                            <div class="col-sm-6">@diversionResponse.RecommendedTechnician.Distance.ToString("F1") km</div>
+                        </div>
+                        <div class="row mb-2">
+                            <div class="col-sm-6"><strong>ETA:</strong></div>
+                            <div class="col-sm-6">@diversionResponse.RecommendedTechnician.EstimatedTravelTime.ToString("F0") min</div>
+                        </div>
+                        @if (!string.IsNullOrEmpty(diversionResponse.PreviousJobId))
+                        {
+                            <div class="row mb-2">
+                                <div class="col-sm-6"><strong>Previous Job:</strong></div>
+                                <div class="col-sm-6">@diversionResponse.PreviousJobId</div>
+                            </div>
+                            <div class="row mb-2">
+                                <div class="col-sm-6"><strong>Estimated Delay:</strong></div>
+                                <div class="col-sm-6">@diversionResponse.EstimatedDelayMinutes.ToString("F0") min</div>
+                            </div>
+                        }
+
+                        <div class="mt-3">
+                            <h6>Detailed Scores:</h6>
+                            <div class="row">
+                                <div class="col-6">Skills: @diversionResponse.RecommendedTechnician.SkillsScore.ToString("P0")</div>
+                                <div class="col-6">Geographic: @diversionResponse.RecommendedTechnician.GeographicScore.ToString("P0")</div>
+                            </div>
+                            <div class="row">
+                                <div class="col-6">Distance: @diversionResponse.RecommendedTechnician.DistanceScore.ToString("P0")</div>
+                                <div class="col-6">Availability: @diversionResponse.RecommendedTechnician.AvailabilityScore.ToString("P0")</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+
+    @if (diversionResponse?.RequiredNotifications?.Any() == true)
+    {
+        <div class="card mb-4">
+            <div class="card-header bg-info text-white">
+                <h5><i class="fas fa-bell me-2"></i>Automated Notifications Sent</h5>
+            </div>
+            <div class="card-body">
+                @foreach (var notification in diversionResponse.RequiredNotifications)
+                {
+                    <div class="alert @GetNotificationTypeClass(notification.Type) mb-2">
+                        <div class="row">
+                            <div class="col-md-2"><strong>@notification.Type:</strong></div>
+                            <div class="col-md-3">@notification.Recipient</div>
+                            <div class="col-md-7">@notification.Message</div>
+                        </div>
+                        @if (notification.IsUrgent)
+                        {
+                            <small class="badge bg-warning text-dark">URGENT</small>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    }
+}
+
+@if (currentTechnicians?.Any() == true)
+{
+    <div class="card">
+        <div class="card-header">
+            <h5><i class="fas fa-users me-2"></i>Current Technician Status</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                @foreach (var tech in currentTechnicians.Take(8))
+                {
+                    <div class="col-md-6 col-lg-4 mb-3">
+                        <div class="card @GetTechnicianStatusClass(tech.CurrentStatus.Status)">
+                            <div class="card-body p-3">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <h6 class="card-title mb-0">@tech.Name</h6>
+                                    <span class="badge @GetStatusBadgeClass(tech.CurrentStatus.Status)">
+                                        @tech.CurrentStatus.Status
+                                    </span>
+                                </div>
+                                <p class="card-text">
+                                    <small class="text-muted">ID: @tech.TechnicianId</small><br/>
+                                    @if (tech.CurrentStatus.Status == "EnRoute")
+                                    {
+                                        <small><i class="fas fa-clock me-1"></i>ETA: @tech.CurrentStatus.EstimatedArrivalMinutes.ToString("F0") min</small><br/>
+                                    }
+                                    @if (!string.IsNullOrEmpty(tech.CurrentJobId))
+                                    {
+                                        <small><i class="fas fa-briefcase me-1"></i>Job: @tech.CurrentJobId</small><br/>
+                                    }
+                                    <small>
+                                        <i class="fas fa-@(tech.CanBeInterrupted ? "check text-success" : "times text-danger") me-1"></i>
+                                        @(tech.CanBeInterrupted ? "Can be interrupted" : "Cannot be interrupted")
+                                    </small>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private JobRequest? emergencyJob;
+    private EmergencyDiversionResponse? diversionResponse;
+    private List<Technician>? currentTechnicians;
+    private bool isProcessing = false;
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        currentTechnicians = DemoDataService.GetSampleTechnicians();
+    }
+
+    private async Task SimulateEmergency()
+    {
+        try
+        {
+            isProcessing = true;
+            errorMessage = null;
+            StateHasChanged();
+
+            // Create emergency job
+            emergencyJob = DemoDataService.CreateEmergencyJob();
+
+            // Get current technicians
+            currentTechnicians = DemoDataService.GetSampleTechnicians();
+
+            // Simulate some technicians being assigned to current jobs
+            var assignedTechnicians = currentTechnicians
+                .Where(t => !t.IsAvailable && t.CurrentStatus.Status != "Available")
+                .ToList();
+
+            // Create diversion request
+            var request = new EmergencyDiversionRequest
+            {
+                EmergencyJob = emergencyJob,
+                CurrentlyAssignedTechnicians = assignedTechnicians,
+                AllAvailableTechnicians = currentTechnicians,
+                AllowInterruption = true,
+                MaxDiversionRadius = 50
+            };
+
+            // Find best diversion
+            diversionResponse = await DiversionService.FindBestDiversionAsync(request);
+
+            // Send notifications (simulated)
+            if (diversionResponse.RequiredNotifications?.Any() == true)
+            {
+                foreach (var notification in diversionResponse.RequiredNotifications)
+                {
+                    await NotificationService.SendEmergencyDiversionNotificationAsync(notification);
+                }
+            }
+
+            // Start tracking the selected technician
+            if (diversionResponse.RecommendedTechnician != null)
+            {
+                await TrackingService.StartTrackingAsync(
+                    diversionResponse.RecommendedTechnician.TechnicianId,
+                    emergencyJob.JobId);
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isProcessing = false;
+            StateHasChanged();
+        }
+    }
+
+    private string GetDiversionTypeClass(string diversionType) => diversionType switch
+    {
+        "Available" => "bg-success",
+        "Rerouted" => "bg-warning text-dark",
+        "Interrupted" => "bg-danger",
+        _ => "bg-secondary"
+    };
+
+    private string GetNotificationTypeClass(string notificationType) => notificationType.ToUpper() switch
+    {
+        "SMS" => "alert-info",
+        "EMAIL" => "alert-secondary",
+        "CALL" => "alert-warning",
+        _ => "alert-light"
+    };
+
+    private string GetTechnicianStatusClass(string status) => status switch
+    {
+        "Available" => "border-success",
+        "EnRoute" => "border-warning",
+        "OnSite" => "border-info",
+        "Busy" => "border-danger",
+        _ => "border-secondary"
+    };
+
+    private string GetStatusBadgeClass(string status) => status switch
+    {
+        "Available" => "bg-success",
+        "EnRoute" => "bg-warning text-dark",
+        "OnSite" => "bg-info",
+        "Busy" => "bg-danger",
+        _ => "bg-secondary"
+    };
+}

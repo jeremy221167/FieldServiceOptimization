@@ -1,0 +1,186 @@
+@page "/simple-test"
+@inject IDemoDataService DemoDataService
+@inject ITenantRecommendationService RecommendationService
+
+<PageTitle>Simple ML.NET Test</PageTitle>
+
+<h3>Simple ML.NET Recommendation Test</h3>
+
+<div class="mb-3">
+    <button class="btn btn-primary" @onclick="RunTest" disabled="@isLoading">
+        @if (isLoading)
+        {
+            <span class="spinner-border spinner-border-sm me-2"></span>
+        }
+        Test ML.NET Recommendations
+    </button>
+</div>
+
+@if (currentJob != null)
+{
+    <div class="row">
+        <div class="col-md-6">
+            <h4>Job Request</h4>
+            <div class="card">
+                <div class="card-body">
+                    <p><strong>Job ID:</strong> @currentJob.JobId</p>
+                    <p><strong>Service:</strong> @currentJob.ServiceType</p>
+                    <p><strong>Equipment:</strong> @currentJob.Equipment</p>
+                    <p><strong>Location:</strong> @currentJob.Location</p>
+                    <p><strong>Priority:</strong> @currentJob.Priority</p>
+                    <p><strong>SLA Hours:</strong> @currentJob.SlaHours</p>
+                    <p><strong>Scheduled:</strong> @currentJob.ScheduledDate.ToString("yyyy-MM-dd HH:mm")</p>
+
+                    @if (currentJob.RequiredSkills.Any())
+                    {
+                        <h6>Required Skills:</h6>
+                        @foreach (var skill in currentJob.RequiredSkills)
+                        {
+                            <span class="badge bg-secondary me-1">@skill.Key (Level @skill.Value)</span>
+                        }
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <h4>Top Recommendations</h4>
+            @if (recommendations != null && recommendations.Any())
+            {
+                @foreach (var rec in recommendations.Take(5))
+                {
+                    <div class="card mb-2">
+                        <div class="card-body">
+                            <h6 class="card-title">@rec.Name (ID: @rec.TechnicianId)</h6>
+                            <div class="mb-2">
+                                <div class="progress">
+                                    <div class="progress-bar @GetScoreClass(rec.Score)" style="width: @(rec.Score * 100)%">
+                                        @rec.Score.ToString("P1")
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row small">
+                                <div class="col-6">Skills: @rec.SkillsScore.ToString("P0")</div>
+                                <div class="col-6">Distance: @rec.Distance.ToString("F1") km</div>
+                                <div class="col-6">SLA: @rec.SlaScore.ToString("P0")</div>
+                                <div class="col-6">Travel: @rec.EstimatedTravelTime.ToString("F0") min</div>
+                                <div class="col-6">Geographic: @rec.GeographicScore.ToString("P0")</div>
+                                <div class="col-6">Coverage: @rec.GeographicMatch.CoverageType</div>
+                            </div>
+
+                            @if (rec.GeographicMatch != null && (rec.GeographicMatch.MatchingRegions?.Any() == true || rec.GeographicMatch.IsInPrimaryCity || rec.GeographicMatch.IsInSecondaryCity || rec.GeographicMatch.IsInPostalCode || rec.GeographicMatch.IsWithinServiceRadius))
+                            {
+                                <div class="mt-2">
+                                    <small class="text-info">
+                                        <i class="fas fa-map-marker-alt me-1"></i>
+                                        <strong>Geographic Coverage:</strong><br/>
+                                        @if (rec.GeographicMatch.IsInPrimaryCity)
+                                        {
+                                            <span class="badge bg-success me-1 mb-1">✓ Primary City</span>
+                                        }
+                                        @if (rec.GeographicMatch.IsInSecondaryCity)
+                                        {
+                                            <span class="badge bg-info me-1 mb-1">✓ Secondary City</span>
+                                        }
+                                        @if (rec.GeographicMatch.IsInPostalCode)
+                                        {
+                                            <span class="badge bg-primary me-1 mb-1">✓ Postal Match</span>
+                                        }
+                                        @if (rec.GeographicMatch.IsWithinServiceRadius)
+                                        {
+                                            <span class="badge bg-warning text-dark me-1 mb-1">✓ Service Radius</span>
+                                        }
+                                        @if (rec.GeographicMatch.MatchingRegions?.Any() == true)
+                                        {
+                                            @foreach (var region in rec.GeographicMatch.MatchingRegions)
+                                            {
+                                                <span class="badge bg-secondary me-1 mb-1">📍 @region</span>
+                                            }
+                                        }
+                                        @if (!rec.GeographicMatch.IsInPrimaryCity && !rec.GeographicMatch.IsInSecondaryCity && !rec.GeographicMatch.IsInPostalCode && !rec.GeographicMatch.IsWithinServiceRadius && (rec.GeographicMatch.MatchingRegions?.Any() != true))
+                                        {
+                                            <span class="badge bg-danger me-1 mb-1">⚠ Out of Range</span>
+                                        }
+                                    </small>
+                                </div>
+                            }
+                            @if (!string.IsNullOrEmpty(rec.Explanation))
+                            {
+                                <div class="mt-2">
+                                    <small class="text-muted">@rec.Explanation</small>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+            }
+            else if (isLoading)
+            {
+                <div class="text-center">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            }
+            else if (errorMessage != null)
+            {
+                <div class="alert alert-danger">
+                    <strong>Error:</strong> @errorMessage
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private JobRequest? currentJob;
+    private List<TechnicianRecommendation> recommendations = new();
+    private bool isLoading = false;
+    private string? errorMessage;
+
+    private async Task RunTest()
+    {
+        try
+        {
+            isLoading = true;
+            errorMessage = null;
+            StateHasChanged();
+
+            // Generate sample job and technicians
+            currentJob = DemoDataService.CreateSampleJob();
+            var technicians = DemoDataService.GetSampleTechnicians();
+
+            // Create recommendation request
+            var request = new RecommendationRequest
+            {
+                TenantId = "demo-tenant",
+                Job = currentJob,
+                AvailableTechnicians = technicians,
+                MaxRecommendations = 5,
+                IncludeLlmExplanation = false // Disable LLM for now
+            };
+
+            // Get recommendations from ML.NET service
+            var response = await RecommendationService.GetRecommendationsAsync(request);
+            recommendations = response.Recommendations;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+            recommendations.Clear();
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private string GetScoreClass(double score) => score switch
+    {
+        >= 0.8 => "bg-success",
+        >= 0.6 => "bg-primary",
+        >= 0.4 => "bg-warning",
+        _ => "bg-danger"
+    };
+}
